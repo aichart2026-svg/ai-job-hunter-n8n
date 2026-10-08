@@ -1,0 +1,247 @@
+{
+  "name": "ATS Detector v4 (strict non-empty check)",
+  "description": null,
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "52b1ace5-eec1-4ac6-8690-02263426f3c8",
+      "name": "Run manually"
+    },
+    {
+      "parameters": {
+        "jsCode": "const names = [\n  // старый ИТ-список\n  'Typeform','Wallapop','TravelPerk','Genially','Red Points','Copado','Freepik','Badi','Holded','Jobandtalent','Seedtag','Sherpa.ai','Clarity AI','Manychat','Housfy','Wallbox','Flanks','Fever','Cabify','Domestika','Idealista','Multiverse Computing','Devo','Signaturit','Chicfy','Deporvillage','Job Today','Datumize','Bipi','Alice Biometrics','Zeleros','Divilo',\n  // новое — не-ИТ: BPO/CX, доставка/логистика, travel, mobility, fintech-consumer, media\n  'Glovo','Wolt','Deliveroo','eDreams ODIGEO','Adevinta','Cooltra','Rakuten TV','HelloFresh','Fintonic','Bnext','Younited Credit','Uber','Booking','Trivago','SEUR','GLS Spain'\n];\nconst out = [];\nfor (const name of names) {\n  const base = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n  const kebab = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');\n  const candidates = new Set([base, base + 'hr', base + 'app', base + 'spain', kebab]);\n  for (const slug of candidates) {\n    if (slug) out.push({ json: { name, slug } });\n  }\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "d83d5366-f701-4f80-8017-83a8e15ebf5e",
+      "name": "Company list + slug guesses"
+    },
+    {
+      "parameters": {
+        "jsCode": "const atsTypes = [\n  { ats_type: 'greenhouse', urlTpl: slug => `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs` },\n  { ats_type: 'greenhouse_eu', urlTpl: slug => `https://boards-api.eu.greenhouse.io/v1/boards/${slug}/jobs` },\n  { ats_type: 'lever', urlTpl: slug => `https://api.lever.co/v0/postings/${slug}?mode=json` },\n  { ats_type: 'ashby', urlTpl: slug => `https://api.ashbyhq.com/posting-api/job-board/${slug}` },\n  { ats_type: 'smartrecruiters', urlTpl: slug => `https://api.smartrecruiters.com/v1/companies/${slug}/postings` },\n  { ats_type: 'workable', urlTpl: slug => `https://apply.workable.com/api/v1/widget/accounts/${slug}` }\n];\nconst out = [];\nfor (const item of $input.all()) {\n  for (const ats of atsTypes) {\n    out.push({ json: {\n      name: item.json.name,\n      slug: item.json.slug,\n      ats_type: ats.ats_type,\n      url: ats.urlTpl(item.json.slug)\n    } });\n  }\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "9c630c2f-590c-4935-b23d-11bb2ad223b1",
+      "name": "Expand to ATS candidates"
+    },
+    {
+      "parameters": {
+        "url": "={{$json.url}}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "48503300-31f0-4db2-9c9d-8768c7b3e1c8",
+      "name": "Try candidate URL",
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const origItems = $('Expand to ATS candidates').all();\nconst results = [];\n\nfor (let i = 0; i < $input.all().length; i++) {\n  const input = $input.all()[i];\n  const orig = origItems[i].json;\n  const status = input.json.statusCode;\n  let body = input.json.body;\n  if (typeof body === 'string') {\n    try { body = JSON.parse(body); } catch (e) { body = null; }\n  }\n  let ok = false;\n  if (status === 200 && body) {\n    if ((orig.ats_type === 'greenhouse' || orig.ats_type === 'greenhouse_eu') && Array.isArray(body.jobs) && body.jobs.length > 0) ok = true;\n    if (orig.ats_type === 'lever' && Array.isArray(body) && body.length > 0) ok = true;\n    if (orig.ats_type === 'ashby' && Array.isArray(body.jobs) && body.jobs.length > 0) ok = true;\n    if (orig.ats_type === 'smartrecruiters' && Array.isArray(body.content) && body.content.length > 0) ok = true;\n    if (orig.ats_type === 'workable' && Array.isArray(body.jobs) && body.jobs.length > 0) ok = true;\n  }\n  if (ok) {\n    results.push({ json: { name: orig.name, slug: orig.slug, ats_type: orig.ats_type } });\n  }\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "336cb799-55fb-4f70-82d0-7053585cb6c7",
+      "name": "Keep only real hits"
+    },
+    {
+      "parameters": {
+        "operation": "rowNotExists",
+        "dataTableId": {
+          "__rl": true,
+          "value": "TNQujXqoqHgKODvd",
+          "mode": "list",
+          "cachedResultName": "companies"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "slug",
+              "keyValue": "={{$json.slug}}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        0
+      ],
+      "id": "1c54c2e4-8c7b-46de-bdf6-204be7cae228",
+      "name": "If not already in companies"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "TNQujXqoqHgKODvd",
+          "mode": "list",
+          "cachedResultName": "companies"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "slug": "={{$json.slug}}",
+            "name": "={{$json.name}}",
+            "ats_type": "={{$json.ats_type}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "slug",
+              "displayName": "slug",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "ats_type",
+              "displayName": "ats_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1328,
+        0
+      ],
+      "id": "9734f3d6-e696-430b-8aec-0db9b9628b5b",
+      "name": "Insert into companies"
+    }
+  ],
+  "connections": {
+    "Run manually": {
+      "main": [
+        [
+          {
+            "node": "Company list + slug guesses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Company list + slug guesses": {
+      "main": [
+        [
+          {
+            "node": "Expand to ATS candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expand to ATS candidates": {
+      "main": [
+        [
+          {
+            "node": "Try candidate URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Try candidate URL": {
+      "main": [
+        [
+          {
+            "node": "Keep only real hits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep only real hits": {
+      "main": [
+        [
+          {
+            "node": "If not already in companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If not already in companies": {
+      "main": [
+        [
+          {
+            "node": "Insert into companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionCounter": 3,
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

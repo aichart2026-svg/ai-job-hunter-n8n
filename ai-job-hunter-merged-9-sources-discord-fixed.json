@@ -1,0 +1,1359 @@
+{
+  "name": "AI Job Hunter — Merged (9 Sources + Discord, fixed)",
+  "description": null,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "5f74aa48-e376-4ffe-adce-2c8ddef6ee15",
+      "name": "🧪 Manual Trigger (Test Reset)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -288,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst before = (staticData.seenUrls || []).length;\nstaticData.seenUrls = [];\nstaticData.seenTimestamps = {};\nconsole.log(`Очищено ${before} URL из истории дедупликации.`);\nreturn [{ json: { cleared: before, message: `Очищено ${before} URL. Теперь можно тестировать воркфлоу заново — все вакансии снова будут видны как новые.` } }];"
+      },
+      "id": "1892b9f3-4193-4912-b547-af0f8f03c679",
+      "name": "🧹 Clear Seen URLs (Test Only)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "f8774ba9-76e9-489c-9134-a0e7d084a4d0",
+      "name": "⏰ Every Weekday",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -288,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://remoteok.com/api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json, text/plain, */*"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "en-US,en;q=0.9"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "25eec751-a6ef-479d-912c-f13dafe5f921",
+      "name": "🌍 RemoteOK",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://weworkremotely.com/remote-jobs.rss",
+        "options": {}
+      },
+      "id": "b9ebd47d-73b2-4829-bd06-ffbe9d718074",
+      "name": "📡 We Work Remotely RSS",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        0,
+        160
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://nodesk.co/remote-jobs/index.xml",
+        "options": {}
+      },
+      "id": "3bc76f52-54ac-486c-94b6-071730d49556",
+      "name": "📡 NoDesk RSS",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        0,
+        320
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = s => (s || '').replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim();\n\nconst allItems = $input.all();\nconsole.log('Total items from RemoteOK:', allItems.length);\n\nconst jobs = allItems\n  .map(item => item.json)\n  .filter(j => j && j.position)\n  .map(j => ({\n    title: j.position || '',\n    company: j.company || 'Unknown',\n    location: 'Remote',\n    salary_min: j.salary_min ? parseInt(j.salary_min) : 0,\n    salary_max: j.salary_max ? parseInt(j.salary_max) : 0,\n    description: strip(j.description || '').substring(0, 1500),\n    url: j.url || '',\n    apply_url: j.apply_url || j.url || '',\n    tags: (j.tags || []).join(', '),\n    created: j.date || '',\n    source: 'RemoteOK'\n  }));\n\nconst seen = new Set();\nconst unique = jobs.filter(j => {\n  if (!j.url || seen.has(j.url)) return false;\n  seen.add(j.url);\n  return true;\n});\n\nconsole.log(`RemoteOK jobs: ${unique.length}`);\nreturn unique.map(j => ({ json: j }));"
+      },
+      "id": "a387648c-2a83-42a5-bb4b-430796bce2e5",
+      "name": "🔄 Normalize RemoteOK",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = s => (s || '').replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim();\n\nconst allItems = $input.all();\nconsole.log('Total items from WWR RSS:', allItems.length);\n\nconst jobs = allItems\n  .map(item => item.json)\n  .filter(j => j && j.title)\n  .map(j => {\n    const titleRaw = j.title || '';\n    const colonIdx = titleRaw.indexOf(': ');\n    let company = 'Unknown';\n    let title = titleRaw;\n    if (colonIdx > 0) {\n      company = titleRaw.substring(0, colonIdx).trim();\n      title = titleRaw.substring(colonIdx + 2).trim();\n    }\n    // WWR RSS: link points to weworkremotely.com job page.\n    // apply_url is often in enclosure[0].url or can be extracted from content.\n    // We store platform url separately and expose apply_url when available.\n    const platformUrl = j.link || j.guid || '';\n    const applyUrl = j.enclosure?.url || j['enclosure:url'] || platformUrl;\n    return {\n      title: title,\n      company: company,\n      location: 'Remote',\n      salary_min: 0,\n      salary_max: 0,\n      description: strip(j.contentSnippet || j.content || j.description || '').substring(0, 1500),\n      url: platformUrl,\n      apply_url: applyUrl,\n      tags: '',\n      created: j.pubDate || j.isoDate || '',\n      source: 'WeWorkRemotely'\n    };\n  })\n  .filter(j => j.url);\n\nconst seen = new Set();\nconst unique = jobs.filter(j => {\n  if (seen.has(j.url)) return false;\n  seen.add(j.url);\n  return true;\n});\n\nconsole.log(`WWR jobs: ${unique.length}`);\nreturn unique.map(j => ({ json: j }));"
+      },
+      "id": "82adeb4e-ef8c-4311-a7ef-a11a633aee08",
+      "name": "🔄 Normalize WWR",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = s => (s || '').replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim();\n\nconst allItems = $input.all();\nconsole.log('Total items from NoDesk RSS:', allItems.length);\n\nconst jobs = allItems\n  .map(item => item.json)\n  .filter(j => j && j.title)\n  .map(j => {\n    const platformUrl = j.link || j.guid || '';\n    // NoDesk RSS: apply link is sometimes in enclosure or a separate field\n    const applyUrl = j.enclosure?.url || j['enclosure:url'] || j.apply_url || platformUrl;\n    return {\n      title: strip(j.title || ''),\n      company: strip(j.creator || j['dc:creator'] || j.author || 'Unknown'),\n      location: 'Remote',\n      salary_min: 0,\n      salary_max: 0,\n      description: strip(j.contentSnippet || j.content || j.description || '').substring(0, 1500),\n      url: platformUrl,\n      apply_url: applyUrl,\n      tags: (j.categories || []).join(', '),\n      created: j.pubDate || j.isoDate || '',\n      source: 'NoDesk'\n    };\n  })\n  .filter(j => j.url);\n\nconst seen = new Set();\nconst unique = jobs.filter(j => {\n  if (seen.has(j.url)) return false;\n  seen.add(j.url);\n  return true;\n});\n\nconsole.log(`NoDesk jobs: ${unique.length}`);\nreturn unique.map(j => ({ json: j }));"
+      },
+      "id": "c5e2a3c7-524d-43eb-ad9f-d18688a16733",
+      "name": "🔄 Normalize NoDesk",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "numberInputs": 9
+      },
+      "id": "6eccadd4-50fd-4858-9648-15d31bf8c984",
+      "name": "🔀 Merge All Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        448,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json._error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              },
+              "id": "err-check"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "feb3abcd-c1bd-4ae6-aec1-916b9d242faa",
+      "name": "⚠️ Source Error?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        656,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ embeds: [{ title: '⚠️ Ошибка источника', description: $json._reason || 'Неизвестная ошибка при получении вакансий.', color: 15158332 }] }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "ab045d3a-5614-4027-9e87-00d2ba0561d0",
+      "name": "🚨 Notify Source Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        320
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const seenRows = $('🗄️ Get Seen URLs').all();\nconst seenUrls = new Set(seenRows.map(item => item.json.url).filter(Boolean));\n\nconst allItemsRaw = $('🔀 Merge All Sources').all();\n\nif (allItemsRaw.length === 1 && allItemsRaw[0].json._error) {\n  return [allItemsRaw[0]];\n}\n\nconst newJobs = allItemsRaw.filter(item => {\n  const url = item.json.url;\n  return url && !seenUrls.has(url);\n});\n\nconst bySource = {};\nnewJobs.forEach(item => {\n  const src = item.json.source || 'Unknown';\n  bySource[src] = (bySource[src] || 0) + 1;\n});\nconsole.log(`Total: ${allItemsRaw.length} | New: ${newJobs.length} | Already seen: ${allItemsRaw.length - newJobs.length}`);\nconsole.log('New by source:', JSON.stringify(bySource));\n\nif (newJobs.length === 0) {\n  return [{ json: { _noNewJobs: true } }];\n}\n\nreturn newJobs;\n"
+      },
+      "id": "ecc958cd-138e-4c8b-a4de-9fd6b06835e3",
+      "name": "🔎 Dedup (Data Table)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const real = $input.all().filter(item => !!item.json.url);\n\nif (real.length === 0) {\n  return [{ json: { _noNewJobs: true } }];\n}\n\nreturn real.map(item => ({ json: { ...item.json, _noNewJobs: false } }));"
+      },
+      "id": "c58bc001-fe90-4a89-8198-bd77b0208644",
+      "name": "🆕 Has New Jobs?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "groqApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"openai/gpt-oss-20b\",\n  reasoning_effort: \"low\",\n  response_format: { type: \"json_object\" },\n  max_tokens: 600,\n  temperature: 0.2,\n  messages: [\n    {\n      role: \"system\",\n      content: \"You are a career analyst helping a person with NO professional experience find remote jobs they could realistically take on by leaning heavily on AI tools (ChatGPT, Claude, Midjourney, automation builders, etc).\\n\\nYou are NOT evaluating whether AI could fully replace a human and do the job autonomously. You ARE evaluating whether a beginner — with no prior experience in the field — could complete this job's actual day-to-day tasks well enough to get hired and keep performing, by using AI tools as a crutch/accelerator for the parts they don't know how to do themselves.\\n\\nCRITICAL RULE — READ THE JOB TEXT CAREFULLY:\\nBefore scoring, you MUST extract and consider the ACTUAL requirements stated in the job description. Do not invent or assume requirements. Do not downplay requirements that are explicitly listed. If the job lists specific years of experience, certifications, degrees, or domain expertise — treat them as real blockers, not suggestions.\\n\\nKey signals that a job IS a good fit for this person:\\n- Seniority is junior/entry-level/associate, OR no seniority is specified and the tasks described are routine/templated (content writing, basic data entry, social media, customer support, basic research, simple scripting, translation, transcription, basic design/copy, lead generation, QA testing, simple admin work).\\n- The core tasks are things AI can draft, generate, or heavily assist with even if a human still needs to review/send/operate it.\\n- The required background is generic/learnable rather than deep specialized expertise.\\n\\nKey signals it is NOT a good fit:\\n- Explicitly Senior/Staff/Lead/Principal/Director level, or requires 3+ years specific experience.\\n- Requires licensed/regulated expertise (medical, legal, financial advisory, HR compliance, etc) or domain-specific certifications (SHRM, PHR, PMP, CPA, etc).\\n- Requires specialized systems experience (HRIS, LMS, ERP, Salesforce admin, etc) that takes months/years to learn.\\n- Core task is deep technical architecture, novel research, or complex stakeholder/people management that a true beginner couldn't fake even with AI help.\\n- The job explicitly states experience requirements that a no-experience person clearly does not meet.\\n\\nIMPORTANT: Your reason_ru must reference actual requirements FROM the job text. Never say a job is easy or entry-level if the job text lists specific certifications, years of experience, or specialized system knowledge. If you cannot find evidence in the job text that it is beginner-friendly, default to NOT_SUITABLE.\\n\\nRespond ONLY in valid JSON, no markdown, no extra text.\"\n    },\n    {\n      role: \"user\",\n      content: \"Evaluate this job for a complete beginner who wants to use AI tools to do it:\\n\\nTitle: \" + $json.title + \"\\nCompany: \" + $json.company + \"\\nSource: \" + ($json.source || 'Unknown') + \"\\nTags: \" + $json.tags + \"\\nSalary: \" + $json.salary_min + \" - \" + $json.salary_max + \"\\n\\nDescription:\\n\" + $json.description + \"\\n\\nStep 1 — Extract from the job text above:\\n- Required years of experience (if any)\\n- Required certifications or degrees (if any)\\n- Required specialized tools/systems (if any)\\n- Seniority level (if stated)\\n\\nStep 2 — Based ONLY on what you extracted in Step 1, fill this JSON:\\n{\\n  \\\"ai_feasible\\\": <true if a no-experience beginner could plausibly do this job using AI tools, else false>,\\n  \\\"automation_percent\\\": <0-100, how much of the day-to-day work AI tools can draft/generate/assist with>,\\n  \\\"score\\\": <0-100, overall fit score for a beginner-with-AI>,\\n  \\\"entry_level\\\": <true/false, is this junior/entry-level or has no strict seniority requirement>,\\n  \\\"ai_tools\\\": [\\\"list of specific AI tools that would help a beginner do this job\\\"],\\n  \\\"reason_ru\\\": \\\"2-3 предложения на русском: процитируй конкретные требования из текста вакансии и объясни почему новичок сможет/не сможет закрыть эту вакансию с помощью ИИ\\\",\\n  \\\"verdict\\\": \\\"GREAT_FIT | GOOD_FIT | POSSIBLE_FIT | NOT_SUITABLE\\\"\\n}\"\n    }\n  ]\n}) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 20000
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "e73de578-aabf-40db-8644-c64955e05a47",
+      "name": "🤖 Groq Score Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        160
+      ],
+      "credentials": {
+        "deepSeekApi": {
+          "name": "YOUR_CREDENTIAL"
+        },
+        "groqApi": {
+          "name": "YOUR_CREDENTIAL"
+        }
+      },
+      "continueOnFail": true,
+      "onError": "continueRegularOutput",
+      "notes": "Переход с DeepSeek на Groq (openai/gpt-oss-20b). После импорта: заново выбрать credential Groq в дропдауне Authentication (id credential не переносится через JSON-импорт)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.item.json;\nconst itemIndex = $itemIndex;\n\nlet ai;\ntry {\n  const txt = raw.choices?.[0]?.message?.content || '{}';\n  ai = JSON.parse(txt.replace(/```json|```/g, '').trim());\n} catch(e) {\n  console.log('Failed to parse DeepSeek response:', e.message);\n  ai = { score: 0, verdict: 'NOT_AI', reason_ru: 'Ошибка оценки', ai_tools: [], ai_feasible: false, automation_percent: 0 };\n}\n\nlet job;\ntry {\n  job = $('🆕 Has New Jobs?').itemMatching(itemIndex).json;\n} catch(e) {\n  const allFromHasNewJobs = $('🆕 Has New Jobs?').all();\n  if (allFromHasNewJobs[itemIndex]) {\n    job = allFromHasNewJobs[itemIndex].json;\n  } else {\n    return [];\n  }\n}\n\nconst feasible = ai.ai_feasible === true || ai.ai_feasible === 'true';\nconst autoPct = parseInt(ai.automation_percent) || 0;\n\nconsole.log(`[${itemIndex}] \"${job.title}\" [${job.source}] -> feasible=${feasible}, autoPct=${autoPct}`);\n\nreturn [{ json: {\n  title: job.title,\n  company: job.company,\n  location: job.location,\n  salary_min: job.salary_min,\n  salary_max: job.salary_max,\n  description: job.description,\n  url: job.url,\n  apply_url: job.apply_url || job.url,\n  tags: job.tags,\n  created: job.created,\n  source: job.source || 'Unknown',\n  ai_score: parseInt(ai.score) || 0,\n  ai_verdict: ai.verdict || 'NOT_AI',\n  ai_feasible: feasible,\n  automation_percent: autoPct,\n  ai_tools: ai.ai_tools || [],\n  reason_ru: ai.reason_ru || ''\n}}];"
+      },
+      "id": "bef62db6-69d7-4edf-9e92-125a0fd86a99",
+      "name": "🔗 Merge + Save URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().filter(item => {\n  const j = item.json;\n  const feasible = j.ai_feasible === true;\n  const pct = Number(j.automation_percent) || 0;\n  const pass = feasible && pct >= 50;\n  if (!pass) console.log(`Отфильтровано: \"${j.title}\" feasible=${feasible} pct=${pct}`);\n  return pass;\n});\n"
+      },
+      "id": "cfa7f7dc-b0f8-4116-9b47-e053cf4d4352",
+      "name": "✅ Filter AI ≥ 50%",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const job = $json;\nconst score = job.automation_percent || 0;\n\nlet color;\nif (score >= 90) color = 15844367;\nelse if (score >= 80) color = 5763719;\nelse if (score >= 70) color = 16776960;\nelse color = 3447003;\n\nconst verdictMap = {\n  'GREAT_FIT': '🏆 GREAT FIT',\n  'GOOD_FIT': '✅ GOOD FIT',\n  'POSSIBLE_FIT': '🔄 POSSIBLE FIT',\n  'NOT_SUITABLE': '❌ NOT SUITABLE'\n};\n\nlet salaryStr = 'Не указана';\nif (job.salary_min > 0 && job.salary_max > 0)\n  salaryStr = `$${Math.round(job.salary_min/1000)}k – $${Math.round(job.salary_max/1000)}k`;\nelse if (job.salary_min > 0)\n  salaryStr = `от $${Math.round(job.salary_min/1000)}k`;\n\nconst sourceEmoji = { 'RemoteOK': '🟢', 'WeWorkRemotely': '🔵', 'NoDesk': '🟣', 'Arbeitnow': '🟠', 'Remotive': '🟡', 'Jobicy': '🔴', 'Himalayas': '⚪', 'Adzuna': '🟤', 'Jooble': '🔷' };\nconst srcLabel = `${sourceEmoji[job.source] || '⚫'} ${job.source || 'Unknown'}`;\n\nconst toolsList = (job.ai_tools || []).slice(0, 5).map(t => `✓ ${t}`).join('\\n') || '—';\nconst analysis = (job.reason_ru || '—').substring(0, 1024);\n\n// apply_url = direct link to company/apply page\n// url = platform page (used as embed URL for Discord preview)\nconst applyUrl = job.apply_url || job.url;\nconst platformUrl = job.url;\nconst applyDisplay = applyUrl !== platformUrl\n  ? `[Откликнуться напрямую](${applyUrl})\\n[Страница на платформе](${platformUrl})`\n  : `[Открыть вакансию](${applyUrl})`;\n\nconst embed = {\n  title: job.title.substring(0, 256),\n  url: platformUrl,\n  color: color,\n  fields: [\n    { name: '🤖 AI Автоматизация', value: `${score}%  •  ${verdictMap[job.ai_verdict] || '⚡'}`, inline: true },\n    { name: '🏢 Компания', value: (job.company || '—').substring(0, 100), inline: true },\n    { name: '📌 Источник', value: srcLabel, inline: true },\n    { name: '💰 Зарплата', value: salaryStr, inline: true },\n    { name: '🛠 AI инструменты', value: toolsList.substring(0, 1024), inline: false },\n    { name: '💡 Анализ', value: analysis, inline: false },\n    { name: '🔗 Ссылки', value: applyDisplay.substring(0, 500), inline: false }\n  ],\n  footer: { text: `Анализ выполнен AI • ${new Date().toLocaleDateString('ru-RU')}` }\n};\n\nreturn [{ json: { ...job, discord_embed: embed } }];"
+      },
+      "id": "ad536582-4ac2-46f7-8b38-acee60dc6ab7",
+      "name": "📝 Format Discord Embed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ embeds: [$json.discord_embed] }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "f0d2653f-9723-455f-96c0-10d6fdf4c995",
+      "name": "📨 Send to Discord",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2016,
+        160
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://www.arbeitnow.com/api/job-board-api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json, text/plain, */*"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "8c2b42c2-bb77-47e8-939d-7ae0542d2dbf",
+      "name": "🌍 Arbeitnow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        480
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = s => (s || '').replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim();\n\nconst allItems = $input.all();\nconsole.log('Total items from Arbeitnow:', allItems.length);\n\n// Arbeitnow returns { data: [...] }\nconst raw = allItems[0]?.json;\nconst list = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : []);\n\nconst jobs = list\n  .filter(j => j && j.title && j.remote === true)\n  .map(j => ({\n    title: j.title || '',\n    company: j.company_name || 'Unknown',\n    location: j.location || 'Remote',\n    salary_min: 0,\n    salary_max: 0,\n    description: strip(j.description || '').substring(0, 1500),\n    url: j.url || '',\n    apply_url: j.url || '',\n    tags: [].concat(j.tags || [], j.job_types || []).join(', '),\n    created: j.created_at ? new Date(j.created_at * 1000).toISOString() : '',\n    source: 'Arbeitnow'\n  }));\n\nconst seen = new Set();\nconst unique = jobs.filter(j => {\n  if (!j.url || seen.has(j.url)) return false;\n  seen.add(j.url);\n  return true;\n});\n\nconsole.log(`Arbeitnow jobs: ${unique.length}`);\nreturn unique.map(j => ({ json: j }));"
+      },
+      "id": "dc28952f-578a-4331-b116-d924945aa9ae",
+      "name": "🔄 Normalize Arbeitnow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://remotive.com/api/remote-jobs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json, text/plain, */*"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "1b63ca80-3feb-41f8-9709-b2e0213dcad0",
+      "name": "🌍 Remotive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        640
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = s => (s || '').replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim();\n\nconst allItems = $input.all();\nconsole.log('Total items from Remotive:', allItems.length);\n\nconst raw = allItems[0]?.json;\nconst list = Array.isArray(raw?.jobs) ? raw.jobs : [];\n\nconst jobs = list\n  .filter(j => j && j.title)\n  .map(j => {\n    // salary is a freeform string, e.g. \"$60,000 - $80,000\"\n    const salaryMatch = (j.salary || '').match(/[\\d,]+/g) || [];\n    const nums = salaryMatch.map(n => parseInt(n.replace(/,/g, ''), 10)).filter(n => !isNaN(n));\n    return {\n      title: j.title || '',\n      company: j.company_name || 'Unknown',\n      location: j.candidate_required_location || 'Remote',\n      salary_min: nums[0] || 0,\n      salary_max: nums[1] || nums[0] || 0,\n      description: strip(j.description || '').substring(0, 1500),\n      url: j.url || '',\n      apply_url: j.url || '',\n      tags: (j.tags || []).join(', '),\n      created: j.publication_date || '',\n      source: 'Remotive'\n    };\n  });\n\nconst seen = new Set();\nconst unique = jobs.filter(j => {\n  if (!j.url || seen.has(j.url)) return false;\n  seen.add(j.url);\n  return true;\n});\n\nconsole.log(`Remotive jobs: ${unique.length}`);\nreturn unique.map(j => ({ json: j }));"
+      },
+      "id": "d827393b-de7f-4ad4-878e-9a59fdbabe7a",
+      "name": "🔄 Normalize Remotive",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://jobicy.com/api/v2/remote-jobs?count=50",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json, text/plain, */*"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "92e328cc-c862-443e-bf7c-6a1b4a13d47d",
+      "name": "🌍 Jobicy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        800
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = s => (s || '').replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim();\n\nconst allItems = $input.all();\nconsole.log('Total items from Jobicy:', allItems.length);\n\nconst raw = allItems[0]?.json;\nconst list = Array.isArray(raw?.jobs) ? raw.jobs : [];\n\nconst jobs = list\n  .filter(j => j && j.jobTitle)\n  .map(j => ({\n    title: j.jobTitle || '',\n    company: j.companyName || 'Unknown',\n    location: j.jobGeo || 'Remote',\n    salary_min: j.annualSalaryMin ? parseInt(j.annualSalaryMin) : 0,\n    salary_max: j.annualSalaryMax ? parseInt(j.annualSalaryMax) : 0,\n    description: strip(j.jobExcerpt || j.jobDescription || '').substring(0, 1500),\n    url: j.url || '',\n    apply_url: j.url || '',\n    tags: [].concat(j.jobIndustry || [], j.jobType || []).join(', '),\n    created: j.pubDate || '',\n    source: 'Jobicy'\n  }));\n\nconst seen = new Set();\nconst unique = jobs.filter(j => {\n  if (!j.url || seen.has(j.url)) return false;\n  seen.add(j.url);\n  return true;\n});\n\nconsole.log(`Jobicy jobs: ${unique.length}`);\nreturn unique.map(j => ({ json: j }));"
+      },
+      "id": "938f5594-1cc4-4675-bc43-aea49d9113df",
+      "name": "🔄 Normalize Jobicy",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://himalayas.app/jobs/api?limit=50",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json, text/plain, */*"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "929b14d7-dce0-43cd-853d-4504d0c52ba1",
+      "name": "🌍 Himalayas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        960
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = s => (s || '').replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim();\n\nconst allItems = $input.all();\nconsole.log('Total items from Himalayas:', allItems.length);\n\nconst raw = allItems[0]?.json;\nconst list = Array.isArray(raw?.jobs) ? raw.jobs : (Array.isArray(raw) ? raw : []);\n\nif (list[0]) {\n  console.log('Himalayas sample job keys:', Object.keys(list[0]));\n}\n\nconst jobs = list\n  .filter(j => j && (j.title || j.jobTitle))\n  .map(j => {\n    const url = j.applicationLink || j.guid || j.url || '';\n    return {\n      title: j.title || j.jobTitle || '',\n      company: j.companyName || j.company_name || 'Unknown',\n      location: (j.locationRestrictions || []).join(', ') || 'Remote (Worldwide)',\n      salary_min: j.minSalary ? parseInt(j.minSalary) : 0,\n      salary_max: j.maxSalary ? parseInt(j.maxSalary) : 0,\n      description: strip(j.excerpt || j.description || '').substring(0, 1500),\n      url: url,\n      apply_url: j.applicationLink || url,\n      tags: [].concat(j.categories || [], j.tags || []).join(', '),\n      created: j.pubDate || j.publishedAt || '',\n      source: 'Himalayas'\n    };\n  });\n\nconst seen = new Set();\nconst unique = jobs.filter(j => {\n  if (!j.url || seen.has(j.url)) return false;\n  seen.add(j.url);\n  return true;\n});\n\nconsole.log(`Himalayas jobs: ${unique.length}`);\nreturn unique.map(j => ({ json: j }));"
+      },
+      "id": "ee88f7b6-4572-4e67-ba1f-ce7f4253f77a",
+      "name": "🔄 Normalize Himalayas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Список стран Adzuna (можно расширить/сократить)\n// Полный список поддерживаемых кодов: gb, us, at, au, br, ca, de, fr, in, it, mx, nl, pl, sg, za\nconst countries = ['us', 'gb', 'de', 'fr', 'ca', 'au', 'in', 'nl'];\nreturn countries.map(c => ({ json: { country: c } }));"
+      },
+      "id": "d2b480e7-1dbc-44c6-a481-ca78e7decb85",
+      "name": "🌐 Adzuna Countries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.adzuna.com/v1/api/jobs/{{ $json.country }}/search/1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "app_id",
+              "value": "={{ $env.ADZUNA_APP_ID }}"
+            },
+            {
+              "name": "app_key",
+              "value": "={{ $env.ADZUNA_APP_KEY }}"
+            },
+            {
+              "name": "what",
+              "value": "remote"
+            },
+            {
+              "name": "results_per_page",
+              "value": "20"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "9a97df51-b719-471b-9365-6c24668d919e",
+      "name": "🌍 Adzuna",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        1120
+      ],
+      "disabled": true,
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = s => (s || '').replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim();\n\nconst allItems = $input.all();\nconsole.log('Total items from Adzuna (across countries):', allItems.length);\n\nlet jobs = [];\nfor (const item of allItems) {\n  const raw = item.json;\n  const list = Array.isArray(raw?.results) ? raw.results : [];\n  for (const j of list) {\n    jobs.push({\n      title: j.title || '',\n      company: j.company?.display_name || 'Unknown',\n      location: j.location?.display_name || 'Unknown',\n      salary_min: j.salary_min ? Math.round(j.salary_min) : 0,\n      salary_max: j.salary_max ? Math.round(j.salary_max) : 0,\n      description: strip(j.description || '').substring(0, 1500),\n      url: j.redirect_url || '',\n      apply_url: j.redirect_url || '',\n      tags: j.category?.label || '',\n      created: j.created || '',\n      source: 'Adzuna'\n    });\n  }\n}\n\nconst seen = new Set();\nconst unique = jobs.filter(j => {\n  if (!j.url || seen.has(j.url)) return false;\n  seen.add(j.url);\n  return true;\n});\n\nconsole.log(`Adzuna jobs: ${unique.length}`);\nreturn unique.map(j => ({ json: j }));"
+      },
+      "id": "3b650376-95d5-47cd-a726-62e631be8fb4",
+      "name": "🔄 Normalize Adzuna",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jooble.org/api/a4da9b3c-932c-4dbe-bcb2-18853ae16249",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"keywords\": \"Vector databases, DevOps, REST API integration, N8N developer, AI engineer, API Integration, RAG, Docker, VPS, PostgreSQL, MySQL, Automation Engineer\", \"location\": \"Remote\", \"page\": \"1\", \"ResultOnPage\": \"50\", \"companysearch\": \"false\"}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "3f2919d6-1990-476c-9043-16993fbc599e",
+      "name": "🌍 Jooble",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        1280
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = s => (s || '').replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim();\n\nconst allItems = $input.all();\nconsole.log('Total items from Jooble:', allItems.length);\n\nconst raw = allItems[0]?.json;\nconst list = Array.isArray(raw?.jobs) ? raw.jobs : [];\n\nconst jobs = list\n  .filter(j => j && j.title)\n  .map(j => {\n    const salaryNums = (j.salary || '').match(/[\\d,]+/g) || [];\n    const nums = salaryNums.map(n => parseInt(n.replace(/,/g, ''), 10)).filter(n => !isNaN(n));\n    return {\n      title: j.title || '',\n      company: j.company || 'Unknown',\n      location: j.location || 'Unknown',\n      salary_min: nums[0] || 0,\n      salary_max: nums[1] || nums[0] || 0,\n      description: strip(j.snippet || '').substring(0, 1500),\n      url: j.link || '',\n      apply_url: j.link || '',\n      tags: j.type || '',\n      created: j.updated || '',\n      source: 'Jooble'\n    };\n  });\n\nconst seen = new Set();\nconst unique = jobs.filter(j => {\n  if (!j.url || seen.has(j.url)) return false;\n  seen.add(j.url);\n  return true;\n});\n\nconsole.log(`Jooble jobs: ${unique.length}`);\nreturn unique.map(j => ({ json: j }));"
+      },
+      "id": "b26a3316-75cb-448c-8500-5318cc053130",
+      "name": "🔄 Normalize Jooble",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const junkPatterns = /future consideration|talent pool|resume database|general application|keep (your |)resume on file|various positions|open application|all other/i;\n\nconst physicalPatterns = /in-store|on-the-floor|back of house|warehouse|stockroom|retail store|shift work|on-site|onsite|physical presence|point of sale|till work/i;\n\nconst remoteSignals = /\\bremote\\b|work from home|\\bwfh\\b|anywhere|worldwide|distributed team|удал[её]нн?о/i;\n\nconst out = [];\nfor (const item of $input.all()) {\n  const job = item.json;\n  const title = job.title || '';\n  const desc = job.description || '';\n  const text = `${title} ${desc}`;\n\n  const looksGeneric = junkPatterns.test(text);\n  const tooShort = desc.replace(/\\s+/g, ' ').trim().length < 150;\n  const looksPhysical = physicalPatterns.test(text);\n  const hasRemoteSignal = remoteSignals.test(text);\n\n  if (looksGeneric || tooShort || looksPhysical || !hasRemoteSignal) {\n    console.log(`Пропущено: \"${title}\" (generic=${looksGeneric}, short=${tooShort}, physical=${looksPhysical}, noRemoteSignal=${!hasRemoteSignal})`);\n    continue;\n  }\n  out.push(item);\n}\nreturn out;\n"
+      },
+      "id": "bc773ecc-7873-4763-9d2b-84dd70215214",
+      "name": "🧹 Skip Low-Info Postings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst now = Date.now();\nconst maxLockMs = 30 * 60 * 1000; // страховка на случай, если release почему-то не выполнится\n\nif (staticData.lockUntil && staticData.lockUntil > now) {\n  console.log('Предыдущий запуск ещё выполняется — пропускаю этот триггер.');\n  return [];\n}\n\nstaticData.lockUntil = now + maxLockMs;\nreturn [{ json: { _lockAcquired: true } }];\n"
+      },
+      "id": "f7b71503-0f97-4700-9eca-af3e33148847",
+      "name": "🔒 Acquire Lock",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json._noNewJobs }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              },
+              "id": "route-no-new-jobs"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c1d0890d-0a7d-4b9b-8372-9b650d8e462a",
+      "name": "🔀 Есть новые вакансии?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        16
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\ndelete staticData.lockUntil;\nconsole.log('Лок снят.');\nreturn [{ json: { _released: true } }];\n"
+      },
+      "id": "5eba77ad-e25a-4385-8900-eacf434763c7",
+      "name": "🔓 Release Lock",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "NgwEnMNCJtl0Ayvy",
+          "mode": "id"
+        },
+        "returnAll": true
+      },
+      "id": "55289d6b-9c75-4b39-971b-145cfc419671",
+      "name": "🗄️ Get Seen URLs",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        560,
+        160
+      ],
+      "alwaysOutputData": true,
+      "notes": "ТРЕБУЕТ РУЧНОЙ НАСТРОЙКИ ПОСЛЕ ИМПОРТА: выбрать таблицу seen_jobs_ai_hunter (создать если её нет, колонки: url [string], first_seen [string]), Operation = Get rows, Return All = true, без фильтра."
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all()\n  .filter(item => !!item.json.url)\n  .map(item => ({\n    json: {\n      url: item.json.url,\n      first_seen: new Date().toISOString()\n    }\n  }));\n"
+      },
+      "id": "89ccaf92-60fd-44ac-8e1d-570b094d9b4f",
+      "name": "💾 Prep New URLs for Insert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "NgwEnMNCJtl0Ayvy",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "url": "={{$json.url}}",
+            "first_seen": "={{$json.first_seen}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "first_seen",
+              "displayName": "first_seen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "92b7f977-8090-4f9d-9932-b2c2fc173a3f",
+      "name": "🗄️ Insert Seen URLs",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        880,
+        512
+      ],
+      "alwaysOutputData": true,
+      "notes": "ТРЕБУЕТ РУЧНОЙ НАСТРОЙКИ ПОСЛЕ ИМПОРТА: выбрать ту же таблицу seen_jobs_ai_hunter, Operation = Insert row, смэппить колонки url <- {{$json.url}}, first_seen <- {{$json.first_seen}}."
+    },
+    {
+      "parameters": {
+        "maxItems": 40
+      },
+      "id": "dfd75aa0-67df-4dc1-a26a-b0370b7f4290",
+      "name": "✂️ Limit Batch Size",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        160
+      ],
+      "notes": "Ограничивает число вакансий, уходящих в Groq за один прогон (чтобы не растягивать execution на часы и не копить память). Непрошедшие лимит вакансии не помечаются как seen и попадут в следующий прогон."
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const desc = item.json.description || '';\n  return {\n    json: {\n      ...item.json,\n      description: desc.length > 3000 ? desc.slice(0, 3000) + '...' : desc\n    }\n  };\n});\n"
+      },
+      "id": "7e36b13e-c169-4651-bf7b-76da18e459fe",
+      "name": "✂️ Trim Descriptions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        160
+      ],
+      "notes": "Обрезает description до 3000 символов сразу после сбора из всех источников — чтобы полные многокилобайтные тексты не таскались в памяти через весь остаток длинного execution (Dedup, Has New Jobs, IF, Skip Low-Info, Limit) до момента, когда реально нужны только в Groq Score Job."
+    }
+  ],
+  "connections": {
+    "⏰ Every Weekday": {
+      "main": [
+        [
+          {
+            "node": "🔒 Acquire Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌍 RemoteOK": {
+      "main": [
+        [
+          {
+            "node": "🔄 Normalize RemoteOK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📡 We Work Remotely RSS": {
+      "main": [
+        [
+          {
+            "node": "🔄 Normalize WWR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📡 NoDesk RSS": {
+      "main": [
+        [
+          {
+            "node": "🔄 Normalize NoDesk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 Normalize RemoteOK": {
+      "main": [
+        [
+          {
+            "node": "🔀 Merge All Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 Normalize WWR": {
+      "main": [
+        [
+          {
+            "node": "🔀 Merge All Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "🔀 Merge All Sources": {
+      "main": [
+        [
+          {
+            "node": "✂️ Trim Descriptions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚠️ Source Error?": {
+      "main": [
+        [
+          {
+            "node": "🚨 Notify Source Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🆕 Has New Jobs?": {
+      "main": [
+        [
+          {
+            "node": "🔀 Есть новые вакансии?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔗 Merge + Save URL": {
+      "main": [
+        [
+          {
+            "node": "✅ Filter AI ≥ 50%",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "💾 Prep New URLs for Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Filter AI ≥ 50%": {
+      "main": [
+        [
+          {
+            "node": "📝 Format Discord Embed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📝 Format Discord Embed": {
+      "main": [
+        [
+          {
+            "node": "📨 Send to Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 Normalize NoDesk": {
+      "main": [
+        [
+          {
+            "node": "🔀 Merge All Sources",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "🧪 Manual Trigger (Test Reset)": {
+      "main": [
+        [
+          {
+            "node": "🧹 Clear Seen URLs (Test Only)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧹 Clear Seen URLs (Test Only)": {
+      "main": [
+        [
+          {
+            "node": "🌍 RemoteOK",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📡 We Work Remotely RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📡 NoDesk RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🌍 Arbeitnow",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🌍 Remotive",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🌍 Jobicy",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🌍 Himalayas",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🌐 Adzuna Countries",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🌍 Jooble",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌍 Arbeitnow": {
+      "main": [
+        [
+          {
+            "node": "🔄 Normalize Arbeitnow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌍 Remotive": {
+      "main": [
+        [
+          {
+            "node": "🔄 Normalize Remotive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌍 Jobicy": {
+      "main": [
+        [
+          {
+            "node": "🔄 Normalize Jobicy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌍 Himalayas": {
+      "main": [
+        [
+          {
+            "node": "🔄 Normalize Himalayas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 Normalize Arbeitnow": {
+      "main": [
+        [
+          {
+            "node": "🔀 Merge All Sources",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "🔄 Normalize Remotive": {
+      "main": [
+        [
+          {
+            "node": "🔀 Merge All Sources",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "🔄 Normalize Jobicy": {
+      "main": [
+        [
+          {
+            "node": "🔀 Merge All Sources",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "🔄 Normalize Himalayas": {
+      "main": [
+        [
+          {
+            "node": "🔀 Merge All Sources",
+            "type": "main",
+            "index": 6
+          }
+        ]
+      ]
+    },
+    "🌐 Adzuna Countries": {
+      "main": [
+        [
+          {
+            "node": "🌍 Adzuna",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌍 Adzuna": {
+      "main": [
+        [
+          {
+            "node": "🔄 Normalize Adzuna",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 Normalize Adzuna": {
+      "main": [
+        [
+          {
+            "node": "🔀 Merge All Sources",
+            "type": "main",
+            "index": 7
+          }
+        ]
+      ]
+    },
+    "🌍 Jooble": {
+      "main": [
+        [
+          {
+            "node": "🔄 Normalize Jooble",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 Normalize Jooble": {
+      "main": [
+        [
+          {
+            "node": "🔀 Merge All Sources",
+            "type": "main",
+            "index": 8
+          }
+        ]
+      ]
+    },
+    "🧹 Skip Low-Info Postings": {
+      "main": [
+        [
+          {
+            "node": "✂️ Limit Batch Size",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔒 Acquire Lock": {
+      "main": [
+        [
+          {
+            "node": "🌍 RemoteOK",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📡 We Work Remotely RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📡 NoDesk RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🌍 Arbeitnow",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🌍 Remotive",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🌍 Jobicy",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🌍 Himalayas",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🌐 Adzuna Countries",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🌍 Jooble",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Есть новые вакансии?": {
+      "main": [
+        [
+          {
+            "node": "🔓 Release Lock",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🧹 Skip Low-Info Postings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📨 Send to Discord": {
+      "main": [
+        [
+          {
+            "node": "🔓 Release Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚨 Notify Source Error": {
+      "main": [
+        [
+          {
+            "node": "🔓 Release Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Get Seen URLs": {
+      "main": [
+        [
+          {
+            "node": "🔎 Dedup (Data Table)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔎 Dedup (Data Table)": {
+      "main": [
+        [
+          {
+            "node": "🆕 Has New Jobs?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Prep New URLs for Insert": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Insert Seen URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 Groq Score Job": {
+      "main": [
+        [
+          {
+            "node": "🔗 Merge + Save URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✂️ Limit Batch Size": {
+      "main": [
+        [
+          {
+            "node": "🤖 Groq Score Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✂️ Trim Descriptions": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Get Seen URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionCounter": 11,
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

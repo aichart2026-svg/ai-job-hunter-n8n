@@ -1,0 +1,885 @@
+{
+  "name": "ATS Direct Poll (Spain) job",
+  "description": null,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -896,
+        320
+      ],
+      "id": "ff763028-8581-4ca2-a365-a6f487597abe",
+      "name": "Every 10 min"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.ats_type}}",
+                    "rightValue": "greenhouse",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "caa5bb9f-1440-4947-ae21-fde891d6e2ab"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.ats_type}}",
+                    "rightValue": "lever",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "512043b0-99d3-4b44-b8c4-501eee0b693d"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.ats_type}}",
+                    "rightValue": "ashby",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "d85a057b-40ec-4c61-8d4f-cc18ce1a91ca"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.ats_type}}",
+                    "rightValue": "smartrecruiters",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "42ec4cdd-ab2a-44b9-ba6c-8d3ca7e5538b"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.ats_type}}",
+                    "rightValue": "workable",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "4fbc1b31-cb66-4282-9337-ee0a6e7bc0d5"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -240,
+        320
+      ],
+      "id": "35e2c75e-5053-4e7e-9244-18d014209307",
+      "name": "Switch by ATS"
+    },
+    {
+      "parameters": {
+        "url": "=https://boards-api.greenhouse.io/v1/boards/{{$json.slug}}/jobs?content=true",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5d077928-fe97-42b2-8491-eecd79047941",
+      "name": "Greenhouse jobs",
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = html => (html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\\s+/g, ' ').trim();\nconst results = [];\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const companySlug = $('Get row(s)').itemMatching(i).json.slug;\n  const jobs = items[i].json.jobs || [];\n  for (const j of jobs) {\n    results.push({ json: {\n      job_id: String(j.id),\n      company_slug: companySlug,\n      title: j.title,\n      url: j.absolute_url,\n      description: strip(j.content)\n    }});\n  }\n}\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "707db548-15ae-4bac-ac38-7b64cd58b8f5",
+      "name": "Normalize Greenhouse"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.lever.co/v0/postings/{{$json.slug}}?mode=json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        160
+      ],
+      "id": "92bf8fdb-0702-4668-af74-e5b4f374f949",
+      "name": "Lever jobs",
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = html => (html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\\s+/g, ' ').trim();\nconst results = [];\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const companySlug = $('Get row(s)').itemMatching(i).json.slug;\n  const jobs = Array.isArray(items[i].json) ? items[i].json : [];\n  for (const j of jobs) {\n    results.push({ json: {\n      job_id: String(j.id),\n      company_slug: companySlug,\n      title: j.text,\n      url: j.hostedUrl,\n      description: strip(j.descriptionPlain || j.description)\n    }});\n  }\n}\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        160
+      ],
+      "id": "1f6e4986-3a6c-4d0a-9b27-3fd9e5540023",
+      "name": "Normalize Lever"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.ashbyhq.com/posting-api/job-board/{{$json.slug}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        320
+      ],
+      "id": "6962f24d-b973-43f7-b86a-97ca6fec24ac",
+      "name": "Ashby jobs",
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = html => (html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\\s+/g, ' ').trim();\nconst results = [];\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const companySlug = $('Get row(s)').itemMatching(i).json.slug;\n  const jobs = items[i].json.jobs || [];\n  for (const j of jobs) {\n    results.push({ json: {\n      job_id: String(j.shortcode || j.id),\n      company_slug: companySlug,\n      title: j.title,\n      url: j.url,\n      description: strip(j.description)\n    }});\n  }\n}\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        320
+      ],
+      "id": "7de382cb-d421-40ea-8efa-72df1c87c048",
+      "name": "Normalize Ashby"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.smartrecruiters.com/v1/companies/{{$json.slug}}/postings",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        480
+      ],
+      "id": "816eeed2-e94c-4f2f-814d-8264f81e8012",
+      "name": "SmartRecruiters jobs",
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const companySlug = $('Get row(s)').itemMatching(i).json.slug;\n  const jobs = items[i].json.content || [];\n  for (const j of jobs) {\n    results.push({ json: {\n      job_id: String(j.id),\n      company_slug: companySlug,\n      title: j.name,\n      url: `https://jobs.smartrecruiters.com/${companySlug}/${j.id}`,\n      description: ''\n    }});\n  }\n}\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        480
+      ],
+      "id": "5167296f-a3c4-4fc9-969f-db1e7dd14a22",
+      "name": "Normalize SmartRecruiters"
+    },
+    {
+      "parameters": {
+        "url": "=https://apply.workable.com/api/v1/widget/accounts/{{$json.slug}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        640
+      ],
+      "id": "6bf3ac81-6780-4120-9d93-cb39f15fb94a",
+      "name": "Workable jobs",
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const strip = html => (html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\\s+/g, ' ').trim();\nconst results = [];\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const companySlug = $('Get row(s)').itemMatching(i).json.slug;\n  const jobs = items[i].json.jobs || [];\n  for (const j of jobs) {\n    results.push({ json: {\n      job_id: String(j.shortcode || j.id),\n      company_slug: companySlug,\n      title: j.title,\n      url: j.url,\n      description: strip(j.description)\n    }});\n  }\n}\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        640
+      ],
+      "id": "006b66dd-c3c2-488d-961a-8e16ec9516c1",
+      "name": "Normalize Workable"
+    },
+    {
+      "parameters": {
+        "numberInputs": 5
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        464,
+        320
+      ],
+      "id": "5f52df49-4bbe-4fb6-adad-3e682b7cb432",
+      "name": "Merge all ATS"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((item, idx) => ({ json: item.json, pairedItem: idx }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        320
+      ],
+      "id": "7d773f00-282b-4a9b-82bd-32d5b85b1985",
+      "name": "Reset Item Pairing"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "akuuDxVkTg8OWm6B",
+          "mode": "list",
+          "cachedResultName": "seen_jobs",
+          "cachedResultUrl": "/projects/TYsw3eAdJXxmFyoL/datatables/akuuDxVkTg8OWm6B"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "job_id": "={{$json.job_id}}",
+            "company_slug": "={{$json.company_slug}}",
+            "title": "={{$json.title}}",
+            "url": "={{$json.url}}",
+            "first_seen": "={{$now.toISO()}}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        912,
+        320
+      ],
+      "id": "c5a1fd7a-4bff-4452-9054-99b2faf9dea4",
+      "name": "Insert into seen_jobs"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "=Новая вакансия: **{{$json.title}}** ({{$json.company_slug}})\\n{{$json.url}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        320
+      ],
+      "id": "0b84a331-7902-41e2-b884-0513cb1319ad",
+      "name": "Notify Discord"
+    },
+    {
+      "parameters": {
+        "operation": "rowNotExists",
+        "dataTableId": {
+          "__rl": true,
+          "value": "akuuDxVkTg8OWm6B",
+          "mode": "list",
+          "cachedResultName": "seen_jobs",
+          "cachedResultUrl": "/projects/TYsw3eAdJXxmFyoL/datatables/akuuDxVkTg8OWm6B"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "job_id",
+              "keyValue": "={{$json.job_id}}"
+            },
+            {
+              "keyName": "company_slug",
+              "keyValue": "={{$json.company_slug}}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        320
+      ],
+      "id": "1343bbcc-84f3-4cee-8fe6-f3e8caba2177",
+      "name": "If row does not exist",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "TNQujXqoqHgKODvd",
+          "mode": "list",
+          "cachedResultName": "companies",
+          "cachedResultUrl": "/projects/TYsw3eAdJXxmFyoL/datatables/TNQujXqoqHgKODvd"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -688,
+        320
+      ],
+      "id": "4e3f3282-2804-4fae-9ade-15410e8d4f46",
+      "name": "Get row(s)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepseek.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "deepSeekApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"deepseek-chat\",\n  max_tokens: 400,\n  temperature: 0.2,\n  messages: [\n    {\n      role: \"system\",\n      content: \"Ты оцениваешь вакансии для человека, который ищет удалённую работу в Испании.\\n\\nКритерии человека:\\n- Ищет простую, рутинную работу — не карьеру в конкретной профессии\\n- НЕ имеет профильных сертификатов и глубокой технической экспертизы\\n- Готов и хочет выполнять задачи с опорой на ИИ-инструменты и автоматизацию (компьютер, VPS, n8n, ИИ-агенты) — это не костыль для сокрытия слабости, а осознанный рабочий инструмент, как для любого современного офисного сотрудника\\n- Находится в Испании, работа должна быть легально доступна удалённо оттуда (remote worldwide, remote EU, или прямо remote Spain)\\n\\nПо каждой вакансии оцени три отдельных параметра от 1 до 5:\\n\\n1. task_simplicity — насколько задачи рутинные и низкого порога входа (данные, контент, модерация, базовая поддержка, административные задачи, простая аналитика) вместо специализированной экспертной работы\\n2. entry_barrier_risk — насколько высок риск, что отбор потребует того, чего нет: профильный диплом/сертификат, живое техническое интервью, портфолио с опытом, узкоспециализированные навыки (5 = барьера нет, 1 = почти наверняка отсеет)\\n3. spain_remote_fit — явно ли вакансия доступна удалённо из Испании (5 = прямо указано Spain/EU remote, 1 = только конкретная страна/офис без Испании)\\n\\nЕсли описание отсутствует или очень короткое — оценивай по названию и типу компании, но снижай entry_barrier_risk и task_simplicity умеренно из-за неопределённости, не занижай резко.\\n\\nВерни JSON: { \\\"task_simplicity\\\": N, \\\"entry_barrier_risk\\\": N, \\\"spain_remote_fit\\\": N, \\\"reasoning\\\": \\\"1-2 предложения\\\" }\\n\\nНе занижай task_simplicity только потому что вакансия упоминает опыт работы с ИИ-инструментами — это плюс, не показатель сложности.\\n\\nОтвечай ТОЛЬКО валидным JSON, без markdown и лишнего текста.\"\n    },\n    {\n      role: \"user\",\n      content: \"Оцени эту вакансию:\\n\\nTitle: \" + $('Reset Item Pairing').item.json.title + \"\\nCompany: \" + $('Reset Item Pairing').item.json.company_slug + \"\\n\\nDescription:\\n\" + ($('Reset Item Pairing').item.json.description || 'Описание недоступно.')\n    }\n  ]\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        480
+      ],
+      "id": "10cbcb7d-7038-4154-b8c4-eb51d5e7ecd1",
+      "name": "DeepSeek Score Job",
+      "credentials": {
+        "deepSeekApi": {
+          "name": "YOUR_CREDENTIAL"
+        }
+      },
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $input.item.json;\nconst itemIndex = $itemIndex;\n\nlet ai;\ntry {\n  const txt = raw.choices?.[0]?.message?.content || '{}';\n  ai = JSON.parse(txt.replace(/```json|```/g, '').trim());\n} catch(e) {\n  console.log('Failed to parse DeepSeek response:', e.message);\n  ai = { task_simplicity: 0, entry_barrier_risk: 0, spain_remote_fit: 0, reasoning: 'Ошибка оценки' };\n}\n\nlet job;\ntry {\n  job = $('Reset Item Pairing').itemMatching(itemIndex).json;\n} catch(e) {\n  const all = $('Reset Item Pairing').all();\n  job = all[itemIndex] ? all[itemIndex].json : {};\n}\n\nreturn { json: {\n  job_id: job.job_id,\n  company_slug: job.company_slug,\n  title: job.title,\n  url: job.url,\n  task_simplicity: parseInt(ai.task_simplicity) || 0,\n  entry_barrier_risk: parseInt(ai.entry_barrier_risk) || 0,\n  spain_remote_fit: parseInt(ai.spain_remote_fit) || 0,\n  reason_ru: ai.reasoning || ''\n} };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        480
+      ],
+      "id": "a4cb30a0-9405-426e-8825-5b3b2c48eed3",
+      "name": "Extract AI Score"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-simplicity",
+              "leftValue": "={{ $json.task_simplicity }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "cond-barrier",
+              "leftValue": "={{ $json.entry_barrier_risk }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "cond-spain",
+              "leftValue": "={{ $json.spain_remote_fit }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1360,
+        480
+      ],
+      "id": "341510a5-5066-409f-bfdb-436479967952",
+      "name": "Filter AI Score"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://openclaw:18789/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "REPLACE_ME"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"openclaw\",\n  messages: [\n    {\n      role: \"user\",\n      content: \"Вакансия прошла отбор для человека, который ищет удалённую работу в Испании через ИИ-инструменты (без сертификатов и глубокой технической экспертизы).\\n\\nTitle: \" + $json.title + \"\\nCompany: \" + $json.company_slug + \"\\nURL: \" + $json.url + \"\\n\\nЗадача: найди в интернете контакт нанимающего менеджера или рекрутера в этой компании (LinkedIn, email по паттерну домена, или страница команды), собери короткий контекст о компании/продукте, и подготовь черновик персонализированного письма на русском для отклика на эту вакансию. Не отправляй письмо, только верни готовый черновик текстом, без markdown-разметки.\"\n    }\n  ]\n}) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1600,
+        640
+      ],
+      "id": "fd3875d0-23d1-4a2a-bd66-e8fe4b430f88",
+      "name": "Ask OpenClaw for draft",
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const itemIndex = $itemIndex;\nconst raw = $input.item.json;\nlet job;\ntry {\n  job = $('Filter AI Score').itemMatching(itemIndex).json;\n} catch(e) {\n  const all = $('Filter AI Score').all();\n  job = all[itemIndex] ? all[itemIndex].json : {};\n}\nconst draft = raw.choices?.[0]?.message?.content || raw.error?.message || 'OpenClaw не вернул черновик (возможно, ошибка запроса).';\nreturn [{ json: {\n  title: job.title,\n  company_slug: job.company_slug,\n  url: job.url,\n  draft\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        640
+      ],
+      "id": "9531eb3d-b011-4017-94a7-06ded78cae73",
+      "name": "Format draft for Discord"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "REPLACE_ME_DISCORD_WEBHOOK_URL",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "=Черновик отклика — **{{$json.title}}** ({{$json.company_slug}})\\n{{$json.url}}\\n\\n{{$json.draft}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2048,
+        640
+      ],
+      "id": "b5e21ea6-671f-486f-ade8-588eb731cedc",
+      "name": "Notify Discord (draft)",
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Every 10 min": {
+      "main": [
+        [
+          {
+            "node": "Get row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch by ATS": {
+      "main": [
+        [
+          {
+            "node": "Greenhouse jobs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lever jobs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ashby jobs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SmartRecruiters jobs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Workable jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Greenhouse jobs": {
+      "main": [
+        [
+          {
+            "node": "Normalize Greenhouse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Greenhouse": {
+      "main": [
+        [
+          {
+            "node": "Merge all ATS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lever jobs": {
+      "main": [
+        [
+          {
+            "node": "Normalize Lever",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Lever": {
+      "main": [
+        [
+          {
+            "node": "Merge all ATS",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Ashby jobs": {
+      "main": [
+        [
+          {
+            "node": "Normalize Ashby",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Ashby": {
+      "main": [
+        [
+          {
+            "node": "Merge all ATS",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "SmartRecruiters jobs": {
+      "main": [
+        [
+          {
+            "node": "Normalize SmartRecruiters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize SmartRecruiters": {
+      "main": [
+        [
+          {
+            "node": "Merge all ATS",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Workable jobs": {
+      "main": [
+        [
+          {
+            "node": "Normalize Workable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Workable": {
+      "main": [
+        [
+          {
+            "node": "Merge all ATS",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Merge all ATS": {
+      "main": [
+        [
+          {
+            "node": "Reset Item Pairing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reset Item Pairing": {
+      "main": [
+        [
+          {
+            "node": "If row does not exist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If row does not exist": {
+      "main": [
+        [
+          {
+            "node": "DeepSeek Score Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Score Job": {
+      "main": [
+        [
+          {
+            "node": "Extract AI Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract AI Score": {
+      "main": [
+        [
+          {
+            "node": "Insert into seen_jobs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter AI Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter AI Score": {
+      "main": [
+        [
+          {
+            "node": "Notify Discord",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ask OpenClaw for draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask OpenClaw for draft": {
+      "main": [
+        [
+          {
+            "node": "Format draft for Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format draft for Discord": {
+      "main": [
+        [
+          {
+            "node": "Notify Discord (draft)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s)": {
+      "main": [
+        [
+          {
+            "node": "Switch by ATS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionCounter": 98,
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}
